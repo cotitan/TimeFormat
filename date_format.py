@@ -1,9 +1,9 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
-import os
-import random
 import json
+import os
+from utils import shuffle, BatchManager, build_vocab, load_data
 
 
 class DotAttention(nn.Module):
@@ -27,7 +27,7 @@ class DotAttention(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, vocab, out_len=10, emb_dim=32, hid_dim=128):
+    def __init__(self, vocab, out_len=11, emb_dim=32, hid_dim=128):
         super(Model, self).__init__()
         self.out_len = out_len
         self.hid_dim = hid_dim
@@ -49,8 +49,7 @@ class Model(nn.Module):
 
     def forward(self, inputs, targets, test=False):
         embeds = self.embedding_look_up(inputs)
-        hidden = self.init_hidden(len(inputs))
-        states, hidden = self.encoder(embeds, hidden)
+        states, hidden = self.encoder(embeds, None)
         # logits = self.decode(hidden, targets, test)
         logits = self.attention_decode(states, hidden, targets, test)
         return logits
@@ -79,23 +78,6 @@ class Model(nn.Module):
         return logits
 
 
-class BatchManager:
-    def __init__(self, datas, batch_size):
-        self.steps = int(len(datas) / batch_size)
-        if self.steps * batch_size < len(datas):
-            self.steps += 1
-        self.datas = datas
-        self.bs = batch_size
-        self.bid = 0
-
-    def next_batch(self):
-        batch = list(self.datas[self.bid * self.bs: (self.bid + 1) * self.bs])
-        self.bid += 1
-        if self.bid == self.steps:
-            self.bid = 0
-        return batch
-
-
 def train(inputs, targets, model, optimizer, batch_size=32, epochs=200):
     inputs_batch_manager = BatchManager(inputs, batch_size)
     targets_batch_manager = BatchManager(targets, batch_size)
@@ -115,58 +97,6 @@ def train(inputs, targets, model, optimizer, batch_size=32, epochs=200):
     torch.save(model.state_dict(), os.path.join("models", "params.pkl"))
 
 
-def build_vocab(vocab_file="vocab.json"):
-    vocab = {"<s>": 0, "</s>": 1, "<pad>": 2}
-    fin = open("date_lines.txt", "r", encoding="utf8")
-    for line in fin:
-        for ch in line:
-            if ch not in vocab:
-                vocab[ch] = len(vocab)
-    json.dump(vocab, open(vocab_file, "w", encoding="utf8"))
-
-
-def load_data(vocab_file="vocab.json", n_data=420, include_dirty_data=False):
-    if not os.path.exists(vocab_file):
-        build_vocab(vocab_file)
-    vocab = json.load(open(vocab_file, "r", encoding="utf8"))
-    fin = open("date_lines.txt", "r", encoding="utf8")
-    n = 0
-    inputs = []
-    targets = []
-    max_in_length = 0
-    for idx, line in enumerate(fin):
-        try:
-            src, target = line.strip().split("|")
-        except Exception:
-            print(idx, line)
-            continue
-        if len(target) != 10:
-            print(idx, target)
-        if len(src) > max_in_length:
-            max_in_length = len(src)
-        if target != "xxxx-xx-xx":
-            inputs.append(src)
-            targets.append(target)
-        n += 1
-        if n == n_data:
-            break
-    final_inputs = []
-    for line in inputs:
-        line = [vocab[ch] for ch in line]
-        line += [vocab["<pad>"]] * (max_in_length - len(line))
-        final_inputs.append(line)
-    targets = [[vocab[ch] for ch in line] for line in targets]
-    targets = [[vocab["<s>"]] + line for line in targets]  # adding start token
-    return vocab, final_inputs, targets
-
-
-def shuffle(inputs, targets):
-    c = list(zip(inputs, targets))
-    random.shuffle(c)
-    inputs, targets = zip(*c)
-    return list(inputs), list(targets)
-
-
 def test(inputs, targets, vocab, model, dataset="dev"):
     id2w = {v: k for (k, v) in vocab.items()}
     inputs1 = torch.tensor(inputs, dtype=torch.long)
@@ -178,8 +108,8 @@ def test(inputs, targets, vocab, model, dataset="dev"):
         pred = words[i].numpy()
 
         src_sent = "".join([id2w[id] for id in inputs[i] if id2w[id] != "<pad>"])
-        pred_sent = "".join([id2w[id] for id in pred])
-        target_sent = "".join([id2w[id] for id in targets[i] if id != 0])
+        pred_sent = "".join([id2w[id] for id in pred[:-1]])
+        target_sent = "".join([id2w[id] for id in targets[i][:-1] if id != 0])
         if pred_sent == target_sent:
             right_count += 1
         else:
@@ -194,7 +124,7 @@ def test(inputs, targets, vocab, model, dataset="dev"):
 
 
 if __name__ == "__main__":
-    vocab, inputs, targets = load_data(n_data=850)
+    vocab, max_src_len, max_tgt_len, inputs, targets = load_data(n_data=850)
     inputs, targets = shuffle(inputs, targets)
 
     idx = int(len(inputs) * 0.8)
