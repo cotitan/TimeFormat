@@ -72,7 +72,7 @@ class Embedding(nn.Module):
             self.word_embeddings = nn.Embedding(n_vocab, emb_size)
 
         self.position_embeddings = nn.Embedding.from_pretrained(
-            get_sinusoid_encoding_table(max_seq_len, emb_size), freeze=True)
+            get_sinusoid_encoding_table(max_seq_len, emb_size))
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
@@ -134,7 +134,7 @@ class MultiHeadAttention(nn.Module):
         Ks = [Wk(k) for Wk in self.W_K]
         Vs = [Wv(v) for Wv in self.W_V]
         
-        heads = [self.attn_layer(Qs[i], Ks[i], Vs[i]) for i in range(self.n_head)]
+        heads = [self.attn_layer(Qs[i], Ks[i], Vs[i], mask) for i in range(self.n_head)]
         output = torch.cat([x[0] for x in heads], dim=-1)
         attns = torch.cat([x[1] for x in heads], dim=-1)
 
