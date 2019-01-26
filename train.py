@@ -72,7 +72,7 @@ def main():
     optimizer = Adam(parameters, lr=0.001)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=1)
 
-    idx = int(len(inputs) * 0.9)
+    idx = int(len(inputs) * 0.95)
     train(inputs[:idx], targets[:idx], model, optimizer, n_epochs=100, scheduler=scheduler)
     eval(model, vocab, inputs[idx:], targets[idx:], out_len=12)
 
@@ -104,7 +104,7 @@ def eval(model, vocab, inputs, targets, out_len=12):
         y = torch.tensor(batch_y.next_batch(), dtype=torch.long).cuda()
         
         tgt_seq = torch.ones(x.shape[0], out_len, dtype=torch.long).cuda()
-        tgt_seq *= vocab['<pad>']
+        tgt_seq *= vocab['</s>']
         tgt_seq[:, 0] = vocab['<s>']
         tgt_seq[:, -1] = vocab['</s>']
         for j in range(1, out_len):
