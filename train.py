@@ -46,7 +46,7 @@ def train(train_x, train_y, valid_x, valid_y, model, optimizer, n_epochs, schedu
                 # writer.add_scalar('scalar/train_loss', _loss_, k)
                 with torch.no_grad():
                     valid_loss = run_batch(valid_x, valid_y, model)
-                valid_loss = float(loss.cpu().numpy())
+                valid_loss = float(valid_loss.cpu().numpy())
                 k += 1
                 print('epoch %d, step %d, train_loss = %f, valid_loss = %f' % (epoch, i, train_loss, valid_loss))
 
