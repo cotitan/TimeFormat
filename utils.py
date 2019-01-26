@@ -59,7 +59,7 @@ def load_data(vocab_file="vocab.json", n_data=850, include_dirty_data=False):
     final_inputs = []
     for line in inputs:
         line = [vocab['<s>']] + [vocab[ch] for ch in line] + [vocab['</s>']]
-        line += [vocab["<pad>"]] * (max_src_len + 2 - len(line))
+        line += [vocab["<pad>"]] * (max_src_len - len(line))
         final_inputs.append(line)
     targets = [[vocab[ch] for ch in line] for line in targets]
     targets = [[vocab["<s>"]] + line + [vocab["</s>"]] for line in targets ]
