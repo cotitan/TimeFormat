@@ -16,31 +16,39 @@ config = {
 }
 
 
-def train(inputs, targets, model, optimizer, n_epochs, scheduler=None):
-    batch_x = BatchManager(inputs, 32)
-    batch_y = BatchManager(targets, 32)
+def run_batch(batch_x, batch_y, model):
+    x = torch.tensor(batch_x.next_batch(), dtype=torch.long).cuda()
+    y = torch.tensor(batch_y.next_batch(), dtype=torch.long).cuda()
     
+    logits = model(x, y)
+    
+    loss = 0
+    for j in range(y.shape[0]):
+        loss += model.loss_layer(logits[j], y[j,1:])
+    loss /= y.shape[0]
+
+    return loss
+
+
+
+def train(train_x, train_y, valid_x, valid_y, model, optimizer, n_epochs, scheduler=None):
+
     # writer = SummaryWriter()
     k = 0
     for epoch in range(n_epochs):
-        for i in range(batch_x.steps):
+        for i in range(train_x.steps):
             optimizer.zero_grad()
 
-            x = torch.tensor(batch_x.next_batch(), dtype=torch.long).cuda()
-            y = torch.tensor(batch_y.next_batch(), dtype=torch.long).cuda()
-            
-            logits = model(x, y)
-
-            loss = 0
-            for j in range(y.shape[0]):
-                loss += model.loss_layer(logits[j], y[j,1:])
-            loss /= y.shape[0]
+            loss = run_batch(train_x, train_y, model)
             
             if i % 1 == 0:
-                _loss_ = float(loss.cpu().detach().numpy())
+                train_loss = float(loss.cpu().detach().numpy())
                 # writer.add_scalar('scalar/train_loss', _loss_, k)
+                with torch.no_grad():
+                    valid_loss = run_batch(valid_x, valid_y, model)
+                valid_loss = float(loss.cpu().numpy())
                 k += 1
-                print('epoch %d, step %d, loss = %f' % (epoch, i, _loss_))
+                print('epoch %d, step %d, train_loss = %f, valid_loss = %f' % (epoch, i, train_loss, valid_loss))
 
             loss.backward()
             optimizer.step()
@@ -72,9 +80,17 @@ def main():
     optimizer = Adam(parameters, lr=0.001)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=1)
 
-    idx = int(len(inputs) * 0.95)
-    train(inputs[:idx], targets[:idx], model, optimizer, n_epochs=100, scheduler=scheduler)
-    eval(model, vocab, inputs[idx:], targets[idx:], out_len=12)
+    train_idx = int(len(inputs) * 0.95)
+    valid_idx = int(len(inputs) * 0.95)
+
+    train_x = BatchManager(inputs[:train_idx], 32)
+    train_y = BatchManager(targets[:train_idx], 32)
+    
+    valid_x = BatchManager(inputs[train_idx : valid_idx], 64)
+    valid_y = BatchManager(targets[train_idx: valid_idx], 64)
+
+    train(train_x, train_y, valid_x, valid_y, model, optimizer, n_epochs=100, scheduler=scheduler)
+    eval(model, vocab, inputs[valid_idx:], targets[valid_idx:], out_len=12)
 
 
 def visualize(x_ids, y_ids, pred_ids, vocab):
