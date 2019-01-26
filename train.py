@@ -80,7 +80,7 @@ def main():
     optimizer = Adam(parameters, lr=0.001)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=1)
 
-    train_idx = int(len(inputs) * 0.95)
+    train_idx = int(len(inputs) * 0.90)
     valid_idx = int(len(inputs) * 0.95)
 
     train_x = BatchManager(inputs[:train_idx], 32)
