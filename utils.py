@@ -55,6 +55,7 @@ def load_data(vocab_file="vocab.json", n_data=850, include_dirty_data=False):
         n += 1
         if n == n_data:
             break
+    max_src_len += 2 # include <s> </s>
     final_inputs = []
     for line in inputs:
         line = [vocab['<s>']] + [vocab[ch] for ch in line] + [vocab['</s>']]
