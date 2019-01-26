@@ -58,7 +58,7 @@ def main():
     # set d_model = d_word_vec
     model = Transformer(n_src_vocab=len(vocab), n_tgt_vocab=len(vocab),
                 max_src_len=max_src_len, max_tgt_len=max_tgt_len, d_word_vec=32,
-                N=6, n_head=4, d_q=8, d_k=8, d_v=8, d_model=32, d_inner=64)
+                N=6, n_head=4, d_q=16, d_k=16, d_v=16, d_model=32, d_inner=64)
     model.cuda()
     # model = Encoder(len(vocab), max_src_len, d_src_emb=32, N=3, n_head=4,
     #                 d_q=16, d_k=16, d_v=16, d_model=32, d_inner=32)
@@ -69,11 +69,11 @@ def main():
         model.load_state_dict(torch.load(model_file))
 
     parameters = filter(lambda p : p.requires_grad, model.parameters())
-    optimizer = Adam(parameters, lr=0.00001)
-    scheduler = lr_scheduler.StepLR(optimizer, step_size=6, gamma=0.1)
+    optimizer = Adam(parameters, lr=0.001)
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=1)
 
     idx = int(len(inputs) * 0.9)
-    train(inputs[:idx], targets[:idx], model, optimizer, n_epochs=20, scheduler=scheduler)
+    train(inputs[:idx], targets[:idx], model, optimizer, n_epochs=100, scheduler=scheduler)
     eval(model, vocab, inputs[idx:], targets[idx:], out_len=12)
 
 
