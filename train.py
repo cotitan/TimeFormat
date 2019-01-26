@@ -47,7 +47,7 @@ def train(inputs, targets, model, optimizer, n_epochs, scheduler=None):
         # if scheduler is not None:
         #     scheduler.step()
 
-    torch.save(model.state_dict(), 'models/params_transformer.pkl')
+        torch.save(model.state_dict(), 'models/params_transformer.pkl')
     # writer.close()
 
 
@@ -69,8 +69,8 @@ def main():
         model.load_state_dict(torch.load(model_file))
 
     parameters = filter(lambda p : p.requires_grad, model.parameters())
-    optimizer = Adam(parameters, lr=0.01)
-    scheduler = lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.3)
+    optimizer = Adam(parameters, lr=0.00001)
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=6, gamma=0.1)
 
     idx = int(len(inputs) * 0.9)
     train(inputs[:idx], targets[:idx], model, optimizer, n_epochs=20, scheduler=scheduler)
@@ -86,9 +86,9 @@ def visualize(x_ids, y_ids, pred_ids, vocab):
     for i in range(x_ids.shape[0]):
         x = [id2w[idx] for idx in x_ids[i][1:] if idx not in [vocab['<pad>'], vocab['</s>']]]
         x = "".join(x)
-        y = [id2w[idx] for idx in y_ids[i][1:-1]]
+        y = [id2w[idx] for idx in y_ids[i][1:-1]] # exclude <s> and </s>
         y = "".join(y)
-        pred = [id2w[idx] for idx in pred_ids[i][1:-1] if idx != vocab['</s>']]
+        pred = [id2w[idx] for idx in pred_ids[i][1:-1]]
         pred = "".join(pred)
 
         print(x, y, pred)
@@ -106,6 +106,7 @@ def eval(model, vocab, inputs, targets, out_len=12):
         tgt_seq = torch.ones(x.shape[0], out_len, dtype=torch.long).cuda()
         tgt_seq *= vocab['<pad>']
         tgt_seq[:, 0] = vocab['<s>']
+        tgt_seq[:, -1] = vocab['</s>']
         for j in range(1, out_len):
             logits = model(x, tgt_seq)
             last_word = torch.argmax(logits[:,j-1,:], dim=-1).view(-1, 1)

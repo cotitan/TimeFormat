@@ -72,7 +72,7 @@ class Embedding(nn.Module):
             self.word_embeddings = nn.Embedding(n_vocab, emb_size)
 
         self.position_embeddings = nn.Embedding.from_pretrained(
-            get_sinusoid_encoding_table(max_seq_len, emb_size))
+            get_sinusoid_encoding_table(max_seq_len, emb_size), freeze=True)
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
@@ -290,7 +290,7 @@ class Decoder(nn.Module):
 class Transformer(nn.Module):
     def __init__(self, n_src_vocab, n_tgt_vocab, max_src_len, max_tgt_len,
                 d_word_vec, N, n_head, d_q, d_k, d_v, d_model, d_inner,
-                dropout=0.1, tgt_emb_prj_weight_share=True):
+                dropout=0.1, tgt_emb_prj_weight_share=False):
 
         super(Transformer, self).__init__()
         
