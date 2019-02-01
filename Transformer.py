@@ -8,7 +8,7 @@ import torch.nn.functional as F
 class ScaledDotAttention(nn.Module):
     def __init__(self):
         super(ScaledDotAttention, self).__init__()
-        self.softmax = nn.Softmax(dim=1)
+        self.softmax = nn.Softmax(dim=-1)
     
     def forward(self, q, k, v, mask=None):
         """
@@ -20,10 +20,10 @@ class ScaledDotAttention(nn.Module):
         :return attn_weight:
         """
         scale = 1 / np.sqrt(q.shape[-1])
-        # [batch, 1, d_q] * [batch, d_q, seqlen] *  ==> [batch, 1, seqlen]
+        # [batch, srclen, d_q] * [batch, d_q, outlen] *  ==> [batch, srclen, outlen]
         attn_weight = torch.bmm(q, k.transpose(1,2)) * scale
         if mask is not None:
-            attn_weight.masked_fill(mask, -np.inf)
+            attn_weight = attn_weight.masked_fill(mask, -np.inf)
             
         attn_weight = self.softmax(attn_weight)
         # [batch, 1, seqlen] * [batch, seqlen, d_v] ==> [batch, 1, d_v]
@@ -204,17 +204,19 @@ class Encoder(nn.Module):
     
     def forward(self, src_seq, return_attns=False):
         enc_slf_attn_list = []
+        enc_output_list = []
 
         # batch*seqlen ==> batch*seqlen*emb
         enc_output = self.embedding(src_seq)
         for layer in self.layers:
             enc_output, enc_slf_attn = layer(enc_output)
+            enc_output_list.append(enc_output)
             if return_attns:
                 enc_slf_attn_list.append(enc_slf_attn)
         
         if return_attns:
-            return enc_output, enc_slf_attn_list
-        return enc_output,
+            return enc_output_list, enc_slf_attn_list
+        return enc_output_list,
 
 
 def get_non_pad_mask(seq):
@@ -257,7 +259,7 @@ class Decoder(nn.Module):
             [DecoderLayer(n_head, d_model, d_inner, d_q, d_k, d_v) for _ in range(N)]
         )
     
-    def forward(self, tgt_seq, src_seq, enc_output, return_attns=True):
+    def forward(self, tgt_seq, src_seq, enc_output_list, return_attns=True):
         dec_slf_attn_list = []
         dec_enc_attn_list = []
 
@@ -272,7 +274,10 @@ class Decoder(nn.Module):
 
 
         dec_output = self.embedding(tgt_seq)
+        idx = 0
         for layer in self.layers:
+            enc_output = enc_output_list[idx]
+            idx += 1
             dec_output, dec_slf_attn, dec_enc_attn = layer(
                         dec_output, enc_output,
                         non_pad_mask=non_pad_mask,
@@ -310,12 +315,12 @@ class Transformer(nn.Module):
             self.x_logit_scale = 1.0
 
 
-        self.loss_layer = nn.CrossEntropyLoss()
+        self.loss_layer = nn.CrossEntropyLoss(ignore_index=2) # 2==vocab['<pad>']
 
     def forward(self, src_seq, tgt_seq):
         tgt_seq = tgt_seq[:, :-1]
-        enc_output, *_ = self.encoder(src_seq)
-        dec_output, *_ = self.decoder(tgt_seq, src_seq, enc_output)
+        enc_output_list, *_ = self.encoder(src_seq)
+        dec_output, *_ = self.decoder(tgt_seq, src_seq, enc_output_list)
         seq_logit = self.tgt_word_proj(dec_output) * self.x_logit_scale
         return seq_logit
 

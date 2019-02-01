@@ -6,16 +6,6 @@ from torch.optim import Adam, lr_scheduler
 import os
 
 
-config = {
-    "n_src_layers": 6,
-    "n_tgt_layers": 6,
-    "n_head": 8,
-    "d_word_emb": 32,
-    "d_k": 32,
-    "d_model": 128
-}
-
-
 def run_batch(batch_x, batch_y, model):
     x = torch.tensor(batch_x.next_batch(), dtype=torch.long).cuda()
     y = torch.tensor(batch_y.next_batch(), dtype=torch.long).cuda()
@@ -28,7 +18,6 @@ def run_batch(batch_x, batch_y, model):
     loss /= y.shape[0]
 
     return loss
-
 
 
 def train(train_x, train_y, valid_x, valid_y, model, optimizer, n_epochs, scheduler=None):
@@ -76,10 +65,6 @@ def main():
         print("Loading parameters from %s" % model_file)
         model.load_state_dict(torch.load(model_file))
 
-    parameters = filter(lambda p : p.requires_grad, model.parameters())
-    optimizer = Adam(parameters, lr=0.001)
-    scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=1)
-
     train_idx = int(len(inputs) * 0.90)
     valid_idx = int(len(inputs) * 0.95)
 
@@ -89,8 +74,12 @@ def main():
     valid_x = BatchManager(inputs[train_idx : valid_idx], 64)
     valid_y = BatchManager(targets[train_idx: valid_idx], 64)
 
-    train(train_x, train_y, valid_x, valid_y, model, optimizer, n_epochs=100, scheduler=scheduler)
-    eval(model, vocab, inputs[valid_idx:], targets[valid_idx:], out_len=12)
+    parameters = filter(lambda p : p.requires_grad, model.parameters())
+    optimizer = Adam(parameters, lr=0.0001)
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=1)
+
+    # train(train_x, train_y, valid_x, valid_y, model, optimizer, n_epochs=100, scheduler=scheduler)
+    eval(model, vocab, inputs[train_idx:], targets[train_idx:], out_len=12)
 
 
 def visualize(x_ids, y_ids, pred_ids, vocab):
@@ -99,6 +88,8 @@ def visualize(x_ids, y_ids, pred_ids, vocab):
     pred_ids = pred_ids.cpu().numpy()
 
     id2w = {k:v for v, k in vocab.items()}
+
+    hit = 0    
     for i in range(x_ids.shape[0]):
         x = [id2w[idx] for idx in x_ids[i][1:] if idx not in [vocab['<pad>'], vocab['</s>']]]
         x = "".join(x)
@@ -106,29 +97,36 @@ def visualize(x_ids, y_ids, pred_ids, vocab):
         y = "".join(y)
         pred = [id2w[idx] for idx in pred_ids[i][1:-1]]
         pred = "".join(pred)
+        if y==pred:
+            hit += 1
 
-        print(x, y, pred)
+        print(x, y, pred, y==pred)
+    return hit
 
 
 def eval(model, vocab, inputs, targets, out_len=12):
-    # TODO: 解决预测问题
     model.eval()
-    batch_x = BatchManager(inputs, 16)
-    batch_y = BatchManager(targets, 16)
+    batch_x = BatchManager(inputs, 32)
+    batch_y = BatchManager(targets, 32)
+    hits = 0
+    total = 0
     for i in range(batch_x.steps):
         x = torch.tensor(batch_x.next_batch(), dtype=torch.long).cuda()
         y = torch.tensor(batch_y.next_batch(), dtype=torch.long).cuda()
         
         tgt_seq = torch.ones(x.shape[0], out_len, dtype=torch.long).cuda()
-        tgt_seq *= vocab['</s>']
+        tgt_seq *= vocab['<pad>']
         tgt_seq[:, 0] = vocab['<s>']
-        tgt_seq[:, -1] = vocab['</s>']
         for j in range(1, out_len):
             logits = model(x, tgt_seq)
             last_word = torch.argmax(logits[:,j-1,:], dim=-1).view(-1, 1)
             tgt_seq[:,j] = last_word.squeeze()
-        visualize(x, y, tgt_seq, vocab)
+            if j != out_len-1 :
+                tgt_seq[:,j+1] = vocab['</s>']
+        hits += visualize(x, y, tgt_seq, vocab)
+        total += x.shape[0]
 
+    print('%d/%d, accuracy=%f' % (hits, total, hits/total))
     model.train()
 
 if __name__ == '__main__':
